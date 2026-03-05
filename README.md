@@ -97,7 +97,7 @@ selected_algorithm = "eaSimple"      # EA algorithm type: "eaSimple", "eaMuPlusL
 ## Running the Algorithm
 
 ### Local Execution
-To run the algorithm locally, go into the (`halbacharray-GA_Local`) folder and execute GA_Local.py:
+To run the algorithm locally, go into the `halbacharray-GA_Local` folder and execute GA_Local.py:
 ```bash
 python GA_Local.py
 ```
