@@ -97,10 +97,12 @@ selected_algorithm = "eaSimple"      # EA algorithm type: "eaSimple", "eaMuPlusL
 ## Running the Algorithm
 
 ### Local Execution
-To run the algorithm locally:
+To run the algorithm locally, go into the (`halbacharray-GA_Local`) folder and execute GA_Local.py:
 ```bash
-python GA_main.py
+python GA_Local.py
 ```
+
+This folder contains a self-contained, locally runnable version of the Halbach array GA, including (`GA_Local.py`), (`GA_documentation.py`), (`HallbachRing_Edit_1.py`), and (`halbachFields.py`).
 
 ### Using PBS Scheduler
 The project includes a PBS scheduler job script (`GA_scheduler.job`) for running on HPC clusters:
