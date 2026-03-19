@@ -118,7 +118,38 @@ def extract_symmetric_ring_positions(ringPositions):
     """
     return ringPositions[ringPositions >= 0]
 
-def compute_shim_fields(df, ringPositionsSymmetry, octantMask, simDimensions, magnetSize, resolution):
+def _compute_shim_fields_for_position(args):
+    """
+    Worker function: computes shim fields for a single ring position across all configurations.
+    Designed to be called in parallel via multiprocessing.Pool.
+    """
+    positionIdx, position, df_records, octantMask, simDimensions, magnetSize, resolution = args
+
+    num_rings = len(df_records)
+    result = np.zeros((int(np.sum(octantMask)), num_rings))
+
+    rings = (0,) if position == 0 else (-position, position)
+
+    for sizeIdx, row in enumerate(df_records):
+        fieldData = None
+        for band_idx in range(int(row['BandNumber'])):
+            band_field_data = halbachFields.createHalbach(
+                numMagnets=int(row['MagnetNr'][band_idx]),
+                rings=rings,
+                radius=row['BandRadius'][band_idx],
+                magnetSize=magnetSize,
+                resolution=1e3 / resolution,
+                simDimensions=simDimensions
+            )
+            if fieldData is None:
+                fieldData = np.zeros_like(band_field_data)
+            fieldData += band_field_data
+
+        result[:, sizeIdx] = fieldData[octantMask == 1, 0]
+
+    return positionIdx, result
+
+def compute_shim_fields(df, ringPositionsSymmetry, octantMask, simDimensions, magnetSize, resolution, n_workers=None):
     """
     Computes the shim fields for each ring position and size.
 
@@ -129,6 +160,7 @@ def compute_shim_fields(df, ringPositionsSymmetry, octantMask, simDimensions, ma
     - simDimensions (tuple): The dimensions of the simulation space.
     - magnetSize (float): The size of each magnet.
     - resolution (float): The resolution of the simulation grid.
+    - n_workers (int, optional): Number of parallel worker processes. Defaults to all available CPUs.
 
     Returns:
     - shimFields (numpy.ndarray): 3D array storing the shim fields for each configuration.
@@ -138,32 +170,19 @@ def compute_shim_fields(df, ringPositionsSymmetry, octantMask, simDimensions, ma
     num_rings = df.shape[0]
     shimFields = np.zeros((int(np.sum(octantMask)), num_positions, num_rings))
 
-    for positionIdx, position in enumerate(ringPositionsSymmetry):
-        for sizeIdx in range(num_rings):
-            row = df.iloc[sizeIdx]
-            if position == 0:
-                rings = (0,)
-            else:
-                rings = (-position, position)
+    # Convert df rows to plain dicts so they are picklable for multiprocessing
+    df_records = df.to_dict('records')
 
-            fieldData = None
+    args_list = [
+        (positionIdx, position, df_records, octantMask, simDimensions, magnetSize, resolution)
+        for positionIdx, position in enumerate(ringPositionsSymmetry)
+    ]
 
-            for band_idx in range(int(row['BandNumber'])):
-                band_field_data = halbachFields.createHalbach(
-                    numMagnets=int(row['MagnetNr'][band_idx]),
-                    rings=rings,
-                    radius=row['BandRadius'][band_idx],
-                    magnetSize=magnetSize,
-                    resolution=1e3 / resolution,
-                    simDimensions=simDimensions
-                )
-                if fieldData is None:
-                    fieldData = np.zeros_like(band_field_data)
+    with multiprocessing.Pool(processes=n_workers) as pool:
+        for positionIdx, result in pool.imap_unordered(_compute_shim_fields_for_position, args_list):
+            shimFields[:, positionIdx, :] = result
+            print(f"  Computed shim fields for position {positionIdx + 1}/{num_positions}", flush=True)
 
-                fieldData += band_field_data
-            
-            shimFields[:, positionIdx, sizeIdx] = fieldData[octantMask == 1, 0]
-    
     return shimFields, num_positions
 
 def initialize_shared_data(shimFields):

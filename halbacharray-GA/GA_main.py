@@ -66,6 +66,12 @@ if __name__ == '__main__':
     if not os.path.exists(results_folder):
         os.makedirs(results_folder)
 
+    # Start memory monitoring in a separate thread
+    memory_log_file = os.path.join(results_folder, "memory_usage.csv")
+    memory_monitor_thread = threading.Thread(target=monitor_pbs_resources, args=(job_id, 600, memory_log_file))
+    memory_monitor_thread.daemon = True  # Allows the thread to close with the main program
+    memory_monitor_thread.start()
+
     # Generate Hallbach Rings
     df, num_rings_perm = generate_hallbach_rings(
         config.magnetSize, config.InnerBoreDiameter, config.OuterBoreDiameter,
@@ -82,22 +88,17 @@ if __name__ == '__main__':
     # Compute shim fields
     shimFields, num_positions = compute_shim_fields(
         df, ringPositionsSymmetry, octantMask, config.simDimensions,
-        config.magnetSize, config.resolution)
+        config.magnetSize, config.resolution, n_workers=int(os.environ.get('PBS_NCPUS', os.cpu_count())))
     
     # Share shim fields data (For multi node calculations)
     shared_data = initialize_shared_data(shimFields)
 
+    del shimFields, octantMask, mask  # None of these are needed beyond this point
+
     # Set up DEAP toolbox
     toolbox = setup_deap_toolbox(num_rings_perm, num_positions)
 
-    # Start memory monitoring in a separate thread
-    memory_log_file = os.path.join(results_folder, "memory_usage.csv")
-    memory_monitor_thread = threading.Thread(target=monitor_pbs_resources, args=(job_id, 600, memory_log_file))
-    memory_monitor_thread.daemon = True  # Allows the thread to close with the main program
-    memory_monitor_thread.start()
-
     excel_file_path = save_dataframe_to_excel(df, results_folder, config.InnerBoreDiameter, config.OuterBoreDiameter, config.magnetSize)
-
     # Run Island Model GA with duplicate tracking
     start_time = time.time()
 
