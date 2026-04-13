@@ -62,6 +62,10 @@ def generate_hallbach_rings(magnetSize, InnerBoreDiameter, OuterBoreDiameter, am
 
                     if any(r > bandRadiusThreshold for r in bandRadius):
                         continue
+                        #I added this section to ensure that all the best rings must have an even number of magnets for the sake of symmetry.
+                        if config.even_magnet_only:
+                          if any(m % 2 != 0 for m in bandMagnetNr):
+                              continue
 
                     data.append({
                         'BandNumber': amountBand[i],
